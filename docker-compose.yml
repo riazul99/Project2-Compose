@@ -1,0 +1,36 @@
+version: "3.8"
+
+services:
+  dind:
+    image: docker:24-dind
+    privileged: true   # Required for Docker-in-Docker
+    environment:
+      DOCKER_TLS_CERTDIR: /certs
+    volumes:
+      - dind-storage:/var/lib/docker      # Persistent Docker layers
+      - jenkins-docker-certs:/certs/client
+    networks: [jenkins]
+
+  jenkins:
+    image: jenkins/jenkins:lts-jdk17
+    user: root
+    environment:
+      DOCKER_HOST: tcp://dind:2376
+      DOCKER_CERT_PATH: /certs/client
+      DOCKER_TLS_VERIFY: "1"
+    volumes:
+      - jenkins-home:/var/jenkins_home     # Persist Jenkins data
+      - jenkins-docker-certs:/certs/client:ro
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    depends_on: [dind]
+    networks: [jenkins]
+
+networks:
+  jenkins:
+
+volumes:
+  jenkins-home:
+  jenkins-docker-certs:
+  dind-storage:
