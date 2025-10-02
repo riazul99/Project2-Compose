@@ -1,46 +1,38 @@
-# Project2-Compose — Jenkins + Docker-in-Docker (DinD)
-# - Service `docker` runs the Docker daemon (dockerd) inside a container.
-# - Service `jenkins` is the Jenkins controller that talks to `docker` over TLS.
-# - Named volumes persist Jenkins data and Docker layer cache across restarts.
-
 services:
-  # ---------------- Docker daemon (DinD) ----------------
   docker:
-    image: docker:24-dind                 # DinD image provides dockerd inside the container
-    privileged: true                      # Required so dockerd can run in a container
+    image: docker:24-dind
+    privileged: true
     environment:
-      DOCKER_TLS_CERTDIR: /certs          # Ask DinD to create TLS certs automatically
-    command: ["--host=tcp://0.0.0.0:2376"]  # Expose dockerd on 2376 (TLS)
+      DOCKER_TLS_CERTDIR: /certs
+    command: ["--host=tcp://0.0.0.0:2376"]
     volumes:
-      - docker-storage:/var/lib/docker    # Cache Docker layers for faster builds
-      - jenkins-docker-certs:/certs/client # Share client certs to Jenkins
+      - docker-storage:/var/lib/docker
+      - jenkins-docker-certs:/certs/client
+      - jenkins-home:/var/jenkins_home:ro
     networks: [jenkins]
 
-  # ---------------- Jenkins controller ----------------
   jenkins:
-    image: jenkins/jenkins:lts-jdk17      # LTS Jenkins (JDK 17)
-    user: root                            # Root needed to read mounted certs; jobs can drop privs
+    build:
+      context: .
+      dockerfile: jenkins.Dockerfile
+    user: root
     environment:
-      # Make the Docker CLI inside the Jenkins container talk to DinD securely
       DOCKER_HOST: tcp://docker:2376
       DOCKER_CERT_PATH: /certs/client
       DOCKER_TLS_VERIFY: "1"
     ports:
-      - "8080:8080"                       # Jenkins UI
-      - "50000:50000"                     # Inbound agents (optional)
+      - "8080:8080"
+      - "50000:50000"
     volumes:
-      - jenkins-home:/var/jenkins_home    # Persist Jenkins jobs, plugins, config
-      - jenkins-docker-certs:/certs/client:ro  # TLS client certs created by DinD (read-only)
-    depends_on: [docker]                  # Ensure DinD starts before Jenkins
+      - jenkins-home:/var/jenkins_home
+      - jenkins-docker-certs:/certs/client:ro
+    depends_on: [docker]
     networks: [jenkins]
 
-# ---------------- Isolated network ----------------
 networks:
   jenkins:
 
-# ---------------- Named volumes ----------------
 volumes:
-  jenkins-home:                           # Jenkins state
-  jenkins-docker-certs:                   # TLS client certs shared from DinD
-  docker-storage:                         # Docker layer cache inside DinD
-
+  jenkins-home:
+  jenkins-docker-certs:
+  docker-storage:

@@ -1,0 +1,37 @@
+# Jenkins + Docker-in-Docker with shared Jenkins home so DinD can see workspaces
+services:
+  docker:
+    image: docker:24-dind
+    privileged: true
+    environment:
+      DOCKER_TLS_CERTDIR: /certs             # auto-generate TLS certs
+    command: ["--host=tcp://0.0.0.0:2376"]   # expose Docker daemon (TLS)
+    volumes:
+      - docker-storage:/var/lib/docker       # layer cache
+      - jenkins-docker-certs:/certs/client   # TLS client certs for Jenkins
+      - jenkins-home:/var/jenkins_home:ro    # <<< share Jenkins workspaces with DinD (READ-ONLY)
+    networks: [jenkins]
+
+  jenkins:
+    image: jenkins/jenkins:lts-jdk17
+    user: root
+    environment:
+      DOCKER_HOST: tcp://docker:2376
+      DOCKER_CERT_PATH: /certs/client
+      DOCKER_TLS_VERIFY: "1"
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins-home:/var/jenkins_home       # persist Jenkins config/jobs/workspaces
+      - jenkins-docker-certs:/certs/client:ro
+    depends_on: [docker]
+    networks: [jenkins]
+
+networks:
+  jenkins:
+
+volumes:
+  jenkins-home:
+  jenkins-docker-certs:
+  docker-storage:
