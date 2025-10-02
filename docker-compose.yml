@@ -8,7 +8,7 @@ services:
     volumes:
       - docker-storage:/var/lib/docker
       - jenkins-docker-certs:/certs/client
-      - jenkins-home:/var/jenkins_home:ro
+      - jenkins-home:/var/jenkins_home:rw
     networks: [jenkins]
 
   jenkins:
